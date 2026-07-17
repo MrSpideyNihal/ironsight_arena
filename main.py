@@ -80,7 +80,8 @@ def main():
         _start_server(nickname, server_name, speed_mult, ammo_mult, kills_to_win)
         client.selected_color_idx = color_idx
         std_time.sleep(0.3)
-        _original_host(nickname)
+        actual_port = _server.port if _server else 5555
+        _original_host(nickname, port=actual_port)
 
     if client.menu:
         client.menu.on_host_cb = on_host

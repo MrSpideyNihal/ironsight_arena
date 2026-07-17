@@ -72,11 +72,11 @@ class GameClient:
 
     # ── menu callbacks ────────────────────────
 
-    def host_game(self, nickname):
+    def host_game(self, nickname, port=SERVER_PORT):
         """Called by the menu (or main.py wrapper) after server thread starts."""
         self.player_name = nickname
         self._init_world()
-        self.network.connect("127.0.0.1", SERVER_PORT, self.player_id, nickname, getattr(self, "selected_color_idx", 0))
+        self.network.connect("127.0.0.1", port, self.player_id, nickname, getattr(self, "selected_color_idx", 0))
 
     def join_game(self, ip, nickname, port=SERVER_PORT, color_idx=0):
         self.player_name = nickname
