@@ -64,10 +64,12 @@ def _add_firewall_rules():
 
     # Inline powershell script to configure firewall rules (clears old rules first)
     ps_commands = (
+        f"Remove-NetFirewallRule -DisplayName 'IronsightUDP' -ErrorAction SilentlyContinue; "
+        f"Remove-NetFirewallRule -DisplayName 'IronsightExe' -ErrorAction SilentlyContinue; "
         f"Remove-NetFirewallRule -DisplayName 'Ironsight Arena UDP' -ErrorAction SilentlyContinue; "
         f"Remove-NetFirewallRule -DisplayName 'Ironsight Arena Executable' -ErrorAction SilentlyContinue; "
-        f"New-NetFirewallRule -DisplayName 'Ironsight Arena UDP' -Direction Inbound -Protocol UDP -LocalPort 7777-7787 -Action Allow -Profile Any -ErrorAction SilentlyContinue; "
-        f"New-NetFirewallRule -DisplayName 'Ironsight Arena Executable' -Direction Inbound -Program '{exe_path}' -Action Allow -Profile Any -ErrorAction SilentlyContinue"
+        f"New-NetFirewallRule -DisplayName 'IronsightUDP' -Direction Inbound -Protocol UDP -LocalPort 7777-7787 -Action Allow -Profile Any -ErrorAction SilentlyContinue; "
+        f"New-NetFirewallRule -DisplayName 'IronsightExe' -Direction Inbound -Program '{exe_path}' -Action Allow -Profile Any -ErrorAction SilentlyContinue"
     )
 
     if is_admin:
