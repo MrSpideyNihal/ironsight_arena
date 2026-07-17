@@ -63,9 +63,10 @@ def _add_firewall_rules():
     if is_admin:
         import subprocess
         try:
-            # First remove old rule, then add new one with Profile Any
-            cmd = 'Remove-NetFirewallRule -DisplayName "Ironsight Arena UDP" -ErrorAction SilentlyContinue; New-NetFirewallRule -DisplayName "Ironsight Arena UDP" -Direction Inbound -Protocol UDP -LocalPort 5555-5565 -Action Allow -Profile Any -ErrorAction SilentlyContinue'
-            subprocess.run(['powershell', '-Command', cmd], capture_output=True, creationflags=0x08000000)
+            # Delete old rule first
+            subprocess.run(['netsh', 'advfirewall', 'firewall', 'delete', 'rule', 'name=Ironsight Arena UDP'], capture_output=True, creationflags=0x08000000)
+            # Add new rule allowing incoming UDP traffic on 5555-5565
+            subprocess.run(['netsh', 'advfirewall', 'firewall', 'add', 'rule', 'name=Ironsight Arena UDP', 'dir=in', 'action=allow', 'protocol=UDP', 'localport=5555-5565', 'profile=any'], capture_output=True, creationflags=0x08000000)
         except Exception:
             pass
     else:
@@ -73,17 +74,17 @@ def _add_firewall_rules():
         if not getattr(sys, '_firewall_prompted', False):
             sys._firewall_prompted = True
             try:
-                # Trigger Windows UAC prompt to run PowerShell, remove stale rules, and add a clean Profile Any rule
-                script = 'Remove-NetFirewallRule -DisplayName \\"Ironsight Arena UDP\\" -ErrorAction SilentlyContinue; New-NetFirewallRule -DisplayName \\"Ironsight Arena UDP\\" -Direction Inbound -Protocol UDP -LocalPort 5555-5565 -Action Allow -Profile Any -ErrorAction SilentlyContinue'
+                # Trigger Windows UAC prompt to run netsh to add the firewall rule
+                # Since netsh.exe requires admin, running it with "runas" prompts for elevation
                 ctypes.windll.shell32.ShellExecuteW(
                     None,
                     "runas",
-                    "powershell.exe",
-                    f'-Command "{script}"',
+                    "cmd.exe",
+                    "/c netsh advfirewall firewall delete rule name=\"Ironsight Arena UDP\" & netsh advfirewall firewall add rule name=\"Ironsight Arena UDP\" dir=in action=allow protocol=UDP localport=5555-5565 profile=any",
                     None,
-                    0 # Hide PowerShell window
+                    0 # Hide console window
                 )
-                print("[System] Windows UAC prompt requested to configure Firewall rules (Profile: Any) for UDP multiplayer.", flush=True)
+                print("[System] Windows UAC prompt requested to configure netsh Firewall rules (Profile: Any) for UDP multiplayer.", flush=True)
             except Exception as e:
                 print(f"[System] Failed to prompt for firewall rule: {e}", flush=True)
 
