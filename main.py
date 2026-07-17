@@ -62,15 +62,18 @@ def _add_firewall_rules():
 
     exe_path = os.path.abspath(sys.executable)
 
+    # Inline powershell script to configure firewall rules (clears old rules first)
+    ps_commands = (
+        f"Remove-NetFirewallRule -DisplayName 'Ironsight Arena UDP' -ErrorAction SilentlyContinue; "
+        f"Remove-NetFirewallRule -DisplayName 'Ironsight Arena Executable' -ErrorAction SilentlyContinue; "
+        f"New-NetFirewallRule -DisplayName 'Ironsight Arena UDP' -Direction Inbound -Protocol UDP -LocalPort 7777-7787 -Action Allow -Profile Any -ErrorAction SilentlyContinue; "
+        f"New-NetFirewallRule -DisplayName 'Ironsight Arena Executable' -Direction Inbound -Program '{exe_path}' -Action Allow -Profile Any -ErrorAction SilentlyContinue"
+    )
+
     if is_admin:
         import subprocess
         try:
-            # Delete any existing rules for this program/port to clear block overrides
-            subprocess.run(['netsh', 'advfirewall', 'firewall', 'delete', 'rule', f'program={exe_path}'], capture_output=True, creationflags=0x08000000)
-            subprocess.run(['netsh', 'advfirewall', 'firewall', 'delete', 'rule', 'name=Ironsight Arena UDP'], capture_output=True, creationflags=0x08000000)
-            # Add clean allow rules
-            subprocess.run(['netsh', 'advfirewall', 'firewall', 'add', 'rule', 'name=Ironsight Arena UDP', 'dir=in', 'action=allow', 'protocol=UDP', 'localport=7777-7787', 'profile=any'], capture_output=True, creationflags=0x08000000)
-            subprocess.run(['netsh', 'advfirewall', 'firewall', 'add', 'rule', 'name=Ironsight Arena Executable', 'dir=in', 'action=allow', f'program={exe_path}', 'profile=any'], capture_output=True, creationflags=0x08000000)
+            subprocess.run(['powershell', '-ExecutionPolicy', 'Bypass', '-Command', ps_commands], capture_output=True, creationflags=0x08000000)
         except Exception:
             pass
     else:
@@ -78,27 +81,16 @@ def _add_firewall_rules():
         if not getattr(sys, '_firewall_prompted', False):
             sys._firewall_prompted = True
             try:
-                # Write a temporary batch file to bypass cmd quote-escaping nightmares
-                bat_path = os.path.join(os.path.dirname(exe_path), "allow_firewall.bat")
-                with open(bat_path, "w") as f:
-                    f.write(f'@echo off\n')
-                    f.write(f'netsh advfirewall firewall delete rule program="%~1" >nul 2>&1\n')
-                    f.write(f'netsh advfirewall firewall delete rule name="Ironsight Arena UDP" >nul 2>&1\n')
-                    f.write(f'netsh advfirewall firewall delete rule name="Ironsight Arena Executable" >nul 2>&1\n')
-                    f.write(f'netsh advfirewall firewall add rule name="Ironsight Arena UDP" dir=in action=allow protocol=UDP localport=7777-7787 profile=any >nul 2>&1\n')
-                    f.write(f'netsh advfirewall firewall add rule name="Ironsight Arena Executable" dir=in action=allow program="%~1" profile=any >nul 2>&1\n')
-                    f.write(f'del "%~f0" >nul 2>&1\n') # Batch file deletes itself when done!
-
-                # Trigger UAC prompt to execute the batch file
+                # Trigger Windows UAC prompt to run powershell with bypass
                 ctypes.windll.shell32.ShellExecuteW(
                     None,
                     "runas",
-                    "cmd.exe",
-                    f'/c "{bat_path}" "{exe_path}"',
+                    "powershell.exe",
+                    f"-ExecutionPolicy Bypass -Command \"{ps_commands}\"",
                     None,
                     0 # Hide console window
                 )
-                print("[System] Windows UAC prompt requested to configure netsh Firewall rules (Profile: Any) for UDP multiplayer.", flush=True)
+                print("[System] Windows UAC prompt requested to configure Firewall rules (Profile: Any, Ports: 7777-7787) for UDP multiplayer.", flush=True)
             except Exception as e:
                 print(f"[System] Failed to prompt for firewall rule: {e}", flush=True)
 
