@@ -37,6 +37,14 @@ class ArenaServer:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
+        # Disable Windows SIO_UDP_CONNRESET to ignore ICMP port unreachable errors
+        import os
+        if os.name == 'nt':
+            try:
+                self.sock.ioctl(socket.SIO_UDP_CONNRESET, False)
+            except AttributeError:
+                pass
+
         # Try to bind to self.port, fallback to other ports if already in use
         bound = False
         for offset in range(10):
@@ -96,6 +104,18 @@ class ArenaServer:
     def _handle(self, msg, addr):
         mtype = msg.get("type")
         pid   = msg.get("player_id")
+
+        # Dynamically update client port/address mapping if the player_id is provided
+        if pid:
+            with self.clients_lock:
+                if addr not in self.clients or self.clients[addr]["id"] != pid:
+                    # Remove stale port mappings for this pid
+                    stale = [a for a, info in self.clients.items() if info["id"] == pid]
+                    for a in stale:
+                        if a != addr:
+                            del self.clients[a]
+                    self.clients[addr] = {"id": pid, "last_seen": time.time()}
+                    # If player not in state yet, let join packet handle creation
 
         if mtype == "join":
             name = msg.get("name", "Player")
