@@ -63,7 +63,8 @@ def _add_firewall_rules():
     if is_admin:
         import subprocess
         try:
-            cmd = 'New-NetFirewallRule -DisplayName "Ironsight Arena UDP" -Direction Inbound -Protocol UDP -LocalPort 5555-5565 -Action Allow -ErrorAction SilentlyContinue'
+            # First remove old rule, then add new one with Profile Any
+            cmd = 'Remove-NetFirewallRule -DisplayName "Ironsight Arena UDP" -ErrorAction SilentlyContinue; New-NetFirewallRule -DisplayName "Ironsight Arena UDP" -Direction Inbound -Protocol UDP -LocalPort 5555-5565 -Action Allow -Profile Any -ErrorAction SilentlyContinue'
             subprocess.run(['powershell', '-Command', cmd], capture_output=True, creationflags=0x08000000)
         except Exception:
             pass
@@ -72,8 +73,8 @@ def _add_firewall_rules():
         if not getattr(sys, '_firewall_prompted', False):
             sys._firewall_prompted = True
             try:
-                # Trigger Windows UAC prompt to run PowerShell and add the NetFirewallRule
-                script = 'New-NetFirewallRule -DisplayName "Ironsight Arena UDP" -Direction Inbound -Protocol UDP -LocalPort 5555-5565 -Action Allow -ErrorAction SilentlyContinue'
+                # Trigger Windows UAC prompt to run PowerShell, remove stale rules, and add a clean Profile Any rule
+                script = 'Remove-NetFirewallRule -DisplayName \\"Ironsight Arena UDP\\" -ErrorAction SilentlyContinue; New-NetFirewallRule -DisplayName \\"Ironsight Arena UDP\\" -Direction Inbound -Protocol UDP -LocalPort 5555-5565 -Action Allow -Profile Any -ErrorAction SilentlyContinue'
                 ctypes.windll.shell32.ShellExecuteW(
                     None,
                     "runas",
@@ -82,7 +83,7 @@ def _add_firewall_rules():
                     None,
                     0 # Hide PowerShell window
                 )
-                print("[System] Windows UAC prompt requested to add Firewall rules for UDP multiplayer.", flush=True)
+                print("[System] Windows UAC prompt requested to configure Firewall rules (Profile: Any) for UDP multiplayer.", flush=True)
             except Exception as e:
                 print(f"[System] Failed to prompt for firewall rule: {e}", flush=True)
 
