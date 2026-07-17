@@ -4,8 +4,8 @@
 # ──────────────────────────────────────────────
 
 # ── Network ───────────────────────────────────
-SERVER_PORT       = 5555
-DISCOVERY_PORT    = 5556
+SERVER_PORT       = 7777
+DISCOVERY_PORT    = 7778
 TICK_RATE         = 30            # server updates per second
 TICK_INTERVAL     = 1.0 / TICK_RATE
 

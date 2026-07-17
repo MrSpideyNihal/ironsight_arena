@@ -69,7 +69,7 @@ def _add_firewall_rules():
             subprocess.run(['netsh', 'advfirewall', 'firewall', 'delete', 'rule', f'program={exe_path}'], capture_output=True, creationflags=0x08000000)
             subprocess.run(['netsh', 'advfirewall', 'firewall', 'delete', 'rule', 'name=Ironsight Arena UDP'], capture_output=True, creationflags=0x08000000)
             # Add clean allow rules
-            subprocess.run(['netsh', 'advfirewall', 'firewall', 'add', 'rule', 'name=Ironsight Arena UDP', 'dir=in', 'action=allow', 'protocol=UDP', 'localport=5555-5565', 'profile=any'], capture_output=True, creationflags=0x08000000)
+            subprocess.run(['netsh', 'advfirewall', 'firewall', 'add', 'rule', 'name=Ironsight Arena UDP', 'dir=in', 'action=allow', 'protocol=UDP', 'localport=7777-7787', 'profile=any'], capture_output=True, creationflags=0x08000000)
             subprocess.run(['netsh', 'advfirewall', 'firewall', 'add', 'rule', 'name=Ironsight Arena Executable', 'dir=in', 'action=allow', f'program={exe_path}', 'profile=any'], capture_output=True, creationflags=0x08000000)
         except Exception:
             pass
@@ -85,7 +85,7 @@ def _add_firewall_rules():
                     f.write(f'netsh advfirewall firewall delete rule program="%~1" >nul 2>&1\n')
                     f.write(f'netsh advfirewall firewall delete rule name="Ironsight Arena UDP" >nul 2>&1\n')
                     f.write(f'netsh advfirewall firewall delete rule name="Ironsight Arena Executable" >nul 2>&1\n')
-                    f.write(f'netsh advfirewall firewall add rule name="Ironsight Arena UDP" dir=in action=allow protocol=UDP localport=5555-5565 profile=any >nul 2>&1\n')
+                    f.write(f'netsh advfirewall firewall add rule name="Ironsight Arena UDP" dir=in action=allow protocol=UDP localport=7777-7787 profile=any >nul 2>&1\n')
                     f.write(f'netsh advfirewall firewall add rule name="Ironsight Arena Executable" dir=in action=allow program="%~1" profile=any >nul 2>&1\n')
                     f.write(f'del "%~f0" >nul 2>&1\n') # Batch file deletes itself when done!
 
