@@ -88,18 +88,24 @@ class ArenaServer:
     # ── receive loop ───────────────────────────
 
     def _recv_loop(self):
+        print("[Server] Receive loop started. Waiting for UDP packets...", flush=True)
         while self.running:
             try:
                 data, addr = self.sock.recvfrom(8192)
                 msg = json.loads(data.decode("utf-8"))
+                mtype = msg.get("type")
+                # Log joins and actions to avoid position tick spam
+                if mtype in ("join", "ability", "shoot", "respawn", "leave"):
+                    print(f"[Server Network] Received '{mtype}' from {addr} (player_id={msg.get('player_id')})", flush=True)
                 self._handle(msg, addr)
             except socket.timeout:
                 continue
-            except OSError:
+            except OSError as exc:
                 if not self.running:
                     break
+                print(f"[Server Network Warning] Socket error: {exc}", flush=True)
             except Exception as exc:
-                print(f"[Server] recv error: {exc}")
+                print(f"[Server Network Error] Decode failed: {exc}", flush=True)
 
     def _handle(self, msg, addr):
         mtype = msg.get("type")

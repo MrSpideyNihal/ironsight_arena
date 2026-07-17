@@ -33,14 +33,25 @@ class NetworkManager:
     def connect(self, ip, port, player_id, name, color_idx=0):
         self.server_addr = (ip, int(port))
         self.player_id = player_id
+        self._player_name = name
+        self._color_idx = color_idx
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.settimeout(1.0)
+        
+        # Disable Windows SIO_UDP_CONNRESET to ignore ICMP port unreachable errors
+        import os
+        if os.name == 'nt':
+            try:
+                self.sock.ioctl(socket.SIO_UDP_CONNRESET, False)
+            except AttributeError:
+                pass
+
         self.running = True
 
         threading.Thread(target=self._recv_loop, daemon=True).start()
         threading.Thread(target=self._ping_loop, daemon=True).start()
 
-        # send join a few times (UDP is unreliable)
+        # Initial aggressive join burst
         join_msg = {"type": "join", "player_id": player_id, "name": name, "color_idx": color_idx}
         for i in range(5):
             self.send(join_msg)
@@ -66,23 +77,32 @@ class NetworkManager:
         try:
             data = json.dumps(payload).encode("utf-8")
             self.sock.sendto(data, self.server_addr)
-        except Exception:
-            pass
+            # Log join or ability packets to avoid spamming positions
+            if payload.get("type") in ("join", "ability", "shoot", "respawn"):
+                print(f"[Client Network] Sent '{payload['type']}' to {self.server_addr}", flush=True)
+        except Exception as e:
+            print(f"[Client Network Error] sendto failed to {self.server_addr}: {e}", flush=True)
 
     # ── background threads ────────────────────
 
     def _recv_loop(self):
+        print(f"[Client Network] Receive thread started, listening for server packets...", flush=True)
         while self.running:
             try:
-                data, _ = self.sock.recvfrom(16384)
+                data, addr = self.sock.recvfrom(16384)
                 msg = json.loads(data.decode("utf-8"))
+                mtype = msg.get("type")
+                if mtype in ("joined", "pong"):
+                    print(f"[Client Network] Received '{mtype}' from {addr}", flush=True)
                 self._on_message(msg)
             except socket.timeout:
                 continue
-            except OSError:
+            except OSError as e:
                 if not self.running:
                     break
-            except Exception:
+                print(f"[Client Network Warning] Socket error: {e}", flush=True)
+            except Exception as e:
+                print(f"[Client Network Error] Decode failed: {e}", flush=True)
                 time.sleep(0.05)
 
     def _on_message(self, msg):
@@ -116,6 +136,16 @@ class NetworkManager:
                 # purge very old ping entries
                 cutoff = time.time() - 5
                 self._pings = {k: v for k, v in self._pings.items() if v > cutoff}
+            else:
+                # Retry join request periodically until confirmed
+                name = getattr(self, '_player_name', 'Player')
+                color_idx = getattr(self, '_color_idx', 0)
+                self.send({
+                    "type": "join",
+                    "player_id": self.player_id,
+                    "name": name,
+                    "color_idx": color_idx
+                })
             time.sleep(1.0)
 
     # ── convenience ───────────────────────────
