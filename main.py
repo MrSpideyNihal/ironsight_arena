@@ -78,19 +78,23 @@ def _add_firewall_rules():
         if not getattr(sys, '_firewall_prompted', False):
             sys._firewall_prompted = True
             try:
-                # Trigger Windows UAC prompt to run netsh, clear blocks and add rules
-                cmd_parts = [
-                    f'netsh advfirewall firewall delete rule program=\\"{exe_path}\\"',
-                    'netsh advfirewall firewall delete rule name=\\"Ironsight Arena UDP\\"',
-                    'netsh advfirewall firewall add rule name=\\"Ironsight Arena UDP\\" dir=in action=allow protocol=UDP localport=5555-5565 profile=any',
-                    f'netsh advfirewall firewall add rule name=\\"Ironsight Arena Executable\\" dir=in action=allow program=\\"{exe_path}\\" profile=any'
-                ]
-                script = " & ".join(cmd_parts)
+                # Write a temporary batch file to bypass cmd quote-escaping nightmares
+                bat_path = os.path.join(os.path.dirname(exe_path), "allow_firewall.bat")
+                with open(bat_path, "w") as f:
+                    f.write(f'@echo off\n')
+                    f.write(f'netsh advfirewall firewall delete rule program="%~1" >nul 2>&1\n')
+                    f.write(f'netsh advfirewall firewall delete rule name="Ironsight Arena UDP" >nul 2>&1\n')
+                    f.write(f'netsh advfirewall firewall delete rule name="Ironsight Arena Executable" >nul 2>&1\n')
+                    f.write(f'netsh advfirewall firewall add rule name="Ironsight Arena UDP" dir=in action=allow protocol=UDP localport=5555-5565 profile=any >nul 2>&1\n')
+                    f.write(f'netsh advfirewall firewall add rule name="Ironsight Arena Executable" dir=in action=allow program="%~1" profile=any >nul 2>&1\n')
+                    f.write(f'del "%~f0" >nul 2>&1\n') # Batch file deletes itself when done!
+
+                # Trigger UAC prompt to execute the batch file
                 ctypes.windll.shell32.ShellExecuteW(
                     None,
                     "runas",
                     "cmd.exe",
-                    f'/c {script}',
+                    f'/c "{bat_path}" "{exe_path}"',
                     None,
                     0 # Hide console window
                 )
