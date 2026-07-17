@@ -46,12 +46,45 @@ def _start_server(nickname, server_name=None, speed_mult=1.0, ammo_mult=1.0, kil
 
 
 def _add_firewall_rules():
-    import subprocess
+    import ctypes
+    import sys
+    import os
+
+    # Only run on Windows
+    if os.name != 'nt':
+        return
+
     try:
-        cmd = 'New-NetFirewallRule -DisplayName "Ironsight Arena UDP" -Direction Inbound -Protocol UDP -LocalPort 5555-5565 -Action Allow -ErrorAction SilentlyContinue'
-        subprocess.run(['powershell', '-Command', cmd], capture_output=True, creationflags=0x08000000)
+        # Check if already running with admin privileges
+        is_admin = ctypes.windll.shell32.IsUserAnAdmin() != 0
     except Exception:
-        pass
+        is_admin = False
+
+    if is_admin:
+        import subprocess
+        try:
+            cmd = 'New-NetFirewallRule -DisplayName "Ironsight Arena UDP" -Direction Inbound -Protocol UDP -LocalPort 5555-5565 -Action Allow -ErrorAction SilentlyContinue'
+            subprocess.run(['powershell', '-Command', cmd], capture_output=True, creationflags=0x08000000)
+        except Exception:
+            pass
+    else:
+        # Check if we already asked / tried to elevate during this execution (prevent infinite prompt loops)
+        if not getattr(sys, '_firewall_prompted', False):
+            sys._firewall_prompted = True
+            try:
+                # Trigger Windows UAC prompt to run PowerShell and add the NetFirewallRule
+                script = 'New-NetFirewallRule -DisplayName "Ironsight Arena UDP" -Direction Inbound -Protocol UDP -LocalPort 5555-5565 -Action Allow -ErrorAction SilentlyContinue'
+                ctypes.windll.shell32.ShellExecuteW(
+                    None,
+                    "runas",
+                    "powershell.exe",
+                    f'-Command "{script}"',
+                    None,
+                    0 # Hide PowerShell window
+                )
+                print("[System] Windows UAC prompt requested to add Firewall rules for UDP multiplayer.", flush=True)
+            except Exception as e:
+                print(f"[System] Failed to prompt for firewall rule: {e}", flush=True)
 
 
 def main():
