@@ -41,6 +41,16 @@ def _try_load_np(abs_path, texture_path=None):
         return None
 
 
+def _get_all_descendants(entity):
+    """Recursively collect all children, grandchildren, etc. of an entity."""
+    descendants = []
+    if hasattr(entity, 'children'):
+        for c in entity.children:
+            descendants.append(c)
+            descendants.extend(_get_all_descendants(c))
+    return descendants
+
+
 # ──────────────────────────────────────────────
 #  Base (shared visuals & identity)
 # ──────────────────────────────────────────────
@@ -80,7 +90,8 @@ class _BasePlayer(Entity):
                         scale=12,
                         y=1.6,
                         origin=(0, 0),
-                        color=color.rgb32(255, 255, 100) if is_local else color.white)
+                        color=color.rgb32(255, 255, 100) if is_local else color.white,
+                        enabled=not is_local)
 
         # ── shoulder pads ─────────────────────
         for sx in (-0.55, 0.55):
@@ -266,16 +277,14 @@ class LocalPlayer(_BasePlayer):
             self._grenade_cooldown = max(0.0, self._grenade_cooldown - dt)
 
         # ── build ignore list for raycasts ────
-        ignore = [self]
-        for c in self.children:
-            ignore.append(c)
+        ignore = [self] + _get_all_descendants(self)
 
-        # Ignore other player entities to prevent getting stuck in them
+        # Ignore other player entities (and all their sub-entities recursively)
+        # to prevent getting stuck in them or blocked by their visual parts.
         for ent in scene.entities:
             if hasattr(ent, 'player_id') and ent.player_id and ent != self:
                 ignore.append(ent)
-                for c in ent.children:
-                    ignore.append(c)
+                ignore.extend(_get_all_descendants(ent))
 
         # ── ladder climbing detection ─────────
         near_ladder = False

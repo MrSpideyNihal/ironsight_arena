@@ -107,9 +107,8 @@ class Weapon(Entity):
         ray_dir = (camera.forward + camera.right * sx + camera.up * sy).normalized()
 
         # ── raycast ───────────────────────────
-        ignore = [self.owner]
-        for c in self.owner.children:
-            ignore.append(c)
+        from client.player import _get_all_descendants
+        ignore = [self.owner] + _get_all_descendants(self.owner)
 
         ray = raycast(camera.world_position, ray_dir,
                       distance=120, ignore=ignore)

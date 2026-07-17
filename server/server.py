@@ -139,7 +139,7 @@ class ArenaServer:
                     self.clients[addr]["last_seen"] = time.time()
             if not mapped_pid or (pid and pid != mapped_pid):
                 return
-            self.state.handle_shoot(mapped_pid, msg.get("target_id"), WEAPON_DAMAGE)
+            self.state.handle_shoot(mapped_pid, msg.get("target_id"), msg.get("damage", WEAPON_DAMAGE))
 
         elif mtype == "respawn":
             mapped_pid = None
