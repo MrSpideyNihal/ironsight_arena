@@ -60,13 +60,17 @@ def _add_firewall_rules():
     except Exception:
         is_admin = False
 
+    exe_path = os.path.abspath(sys.executable)
+
     if is_admin:
         import subprocess
         try:
-            # Delete old rule first
+            # Delete any existing rules for this program/port to clear block overrides
+            subprocess.run(['netsh', 'advfirewall', 'firewall', 'delete', 'rule', f'program={exe_path}'], capture_output=True, creationflags=0x08000000)
             subprocess.run(['netsh', 'advfirewall', 'firewall', 'delete', 'rule', 'name=Ironsight Arena UDP'], capture_output=True, creationflags=0x08000000)
-            # Add new rule allowing incoming UDP traffic on 5555-5565
+            # Add clean allow rules
             subprocess.run(['netsh', 'advfirewall', 'firewall', 'add', 'rule', 'name=Ironsight Arena UDP', 'dir=in', 'action=allow', 'protocol=UDP', 'localport=5555-5565', 'profile=any'], capture_output=True, creationflags=0x08000000)
+            subprocess.run(['netsh', 'advfirewall', 'firewall', 'add', 'rule', 'name=Ironsight Arena Executable', 'dir=in', 'action=allow', f'program={exe_path}', 'profile=any'], capture_output=True, creationflags=0x08000000)
         except Exception:
             pass
     else:
@@ -74,13 +78,19 @@ def _add_firewall_rules():
         if not getattr(sys, '_firewall_prompted', False):
             sys._firewall_prompted = True
             try:
-                # Trigger Windows UAC prompt to run netsh to add the firewall rule
-                # Since netsh.exe requires admin, running it with "runas" prompts for elevation
+                # Trigger Windows UAC prompt to run netsh, clear blocks and add rules
+                cmd_parts = [
+                    f'netsh advfirewall firewall delete rule program=\\"{exe_path}\\"',
+                    'netsh advfirewall firewall delete rule name=\\"Ironsight Arena UDP\\"',
+                    'netsh advfirewall firewall add rule name=\\"Ironsight Arena UDP\\" dir=in action=allow protocol=UDP localport=5555-5565 profile=any',
+                    f'netsh advfirewall firewall add rule name=\\"Ironsight Arena Executable\\" dir=in action=allow program=\\"{exe_path}\\" profile=any'
+                ]
+                script = " & ".join(cmd_parts)
                 ctypes.windll.shell32.ShellExecuteW(
                     None,
                     "runas",
                     "cmd.exe",
-                    "/c netsh advfirewall firewall delete rule name=\"Ironsight Arena UDP\" & netsh advfirewall firewall add rule name=\"Ironsight Arena UDP\" dir=in action=allow protocol=UDP localport=5555-5565 profile=any",
+                    f'/c {script}',
                     None,
                     0 # Hide console window
                 )
