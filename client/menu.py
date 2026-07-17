@@ -40,6 +40,11 @@ class MainMenu(Entity):
              origin=(0, 0), y=0.36, scale=1.6,
              color=color.rgb32(200, 200, 220))
 
+        # Instructions / Help banner
+        Text(parent=self, text="INSTRUCTIONS: Only 1 player clicks [HOST GAME]. The other player must join via the LAN list or type Host's IP (e.g. 192.168.25.251) in DIRECT IP and click CONNECT.",
+             origin=(0, 0), y=0.31, scale=0.85,
+             color=color.rgb32(255, 180, 50))
+
         # ── LEFT PANEL: Host / Connect ────────
 
         # nickname
