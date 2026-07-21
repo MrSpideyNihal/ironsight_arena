@@ -120,16 +120,16 @@ class ArenaServer:
         pid   = msg.get("player_id")
 
         # Dynamically update client port/address mapping if the player_id is provided
-        if pid:
+        if pid and mtype != "join":
             with self.clients_lock:
-                if addr not in self.clients or self.clients[addr]["id"] != pid:
-                    # Remove stale port mappings for this pid
-                    stale = [a for a, info in self.clients.items() if info["id"] == pid]
-                    for a in stale:
-                        if a != addr:
-                            del self.clients[a]
-                    self.clients[addr] = {"id": pid, "last_seen": time.time()}
-                    # If player not in state yet, let join packet handle creation
+                if pid in self.state.players:
+                    if addr not in self.clients or self.clients[addr]["id"] != pid:
+                        # Remove stale port mappings for this pid
+                        stale = [a for a, info in self.clients.items() if info["id"] == pid]
+                        for a in stale:
+                            if a != addr:
+                                del self.clients[a]
+                        self.clients[addr] = {"id": pid, "last_seen": time.time()}
 
         if mtype == "join":
             name = msg.get("name", "Player")
