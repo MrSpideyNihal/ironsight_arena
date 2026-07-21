@@ -14,6 +14,39 @@ from server.game_state import GameState
 from server.discovery import DiscoveryBroadcaster, _get_local_ip
 
 
+def _kill_port_owner(port):
+    import subprocess
+    import os
+    if os.name != 'nt':
+        return
+    try:
+        # Run netstat to find PIDs listening or binding to the port
+        cmd = 'netstat -ano'
+        r = subprocess.run(cmd, capture_output=True, text=True, shell=True)
+        if r.returncode != 0:
+            return
+        
+        my_pid = os.getpid()
+        pids_to_kill = set()
+        for line in r.stdout.splitlines():
+            if f":{port}" in line:
+                parts = line.strip().split()
+                if len(parts) >= 5:
+                    pid_str = parts[-1]
+                    try:
+                        pid = int(pid_str)
+                        if pid != my_pid and pid > 0:
+                            pids_to_kill.add(pid)
+                    except ValueError:
+                        pass
+        
+        for pid in pids_to_kill:
+            print(f"[System] Killing zombie process {pid} occupying port {port}...", flush=True)
+            subprocess.run(f'taskkill /F /PID {pid}', capture_output=True, shell=True)
+    except Exception as e:
+        print(f"[System] Failed to clear port {port}: {e}", flush=True)
+
+
 class ArenaServer:
     def __init__(self, host_name="Host Game", speed_mult=1.0, ammo_mult=1.0, kills_to_win=KILLS_TO_WIN_DEFAULT):
         self.host_name = host_name
@@ -47,17 +80,28 @@ class ArenaServer:
             except AttributeError:
                 pass
 
-        # Try to bind to self.port, fallback to other ports if already in use
+        # Try to kill any zombie process holding the port first
+        _kill_port_owner(self.port)
+
         bound = False
-        for offset in range(10):
-            try:
-                target_port = self.port + offset
-                self.sock.bind(("0.0.0.0", target_port))
-                self.port = target_port
-                bound = True
-                break
-            except OSError:
-                continue
+        try:
+            self.sock.bind(("0.0.0.0", self.port))
+            bound = True
+        except OSError as e:
+            print(f"[Server Warning] Failed to bind to port {self.port}: {e}", flush=True)
+
+        if not bound:
+            for offset in range(1, 6):
+                try:
+                    target_port = self.port + offset
+                    _kill_port_owner(target_port)
+                    self.sock.bind(("0.0.0.0", target_port))
+                    print(f"[Server Warning] Port {self.port} was busy. Bound to fallback port {target_port}!", flush=True)
+                    self.port = target_port
+                    bound = True
+                    break
+                except OSError:
+                    continue
 
         if not bound:
             print(f"[Server] Failed to bind to any port starting from {self.port}!", flush=True)

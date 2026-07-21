@@ -64,25 +64,32 @@ def _ensure_firewall():
         f'dir=in protocol=udp localport={ports} action=allow'
     )
 
-    # Try to create rule
+    exe_path = os.path.abspath(sys.executable)
+    exe_rule = "Ironsight Arena Exe"
+    netsh_exe_cmd = (
+        f'netsh advfirewall firewall add rule name="{exe_rule}" '
+        f'dir=in action=allow program="{exe_path}" enable=yes'
+    )
+
+    # Try to create rules
     if is_admin:
         try:
-            r = subprocess.run(netsh_cmd, capture_output=True, text=True, timeout=10)
-            if r.returncode == 0:
-                print(f"[System] Firewall rule '{rule_name}' created (UDP {ports}).", flush=True)
+            r1 = subprocess.run(netsh_cmd, capture_output=True, text=True, timeout=10)
+            r2 = subprocess.run(netsh_exe_cmd, capture_output=True, text=True, timeout=10)
+            if r1.returncode == 0 and r2.returncode == 0:
+                print(f"[System] Firewall rules created successfully.", flush=True)
                 return True
-            else:
-                print(f"[System] netsh failed: {r.stderr.strip()}", flush=True)
         except Exception as e:
             print(f"[System] Firewall setup failed: {e}", flush=True)
     else:
         if not getattr(sys, '_firewall_prompted', False):
             sys._firewall_prompted = True
             try:
-                print("[System] Requesting admin to open UDP ports 7777-7787...", flush=True)
+                print("[System] Requesting admin to configure firewall rules...", flush=True)
+                full_cmd = f'{netsh_cmd} & {netsh_exe_cmd}'
                 ret = ctypes.windll.shell32.ShellExecuteW(
                     None, "runas", "cmd.exe",
-                    f'/c {netsh_cmd} & echo Rule created. & timeout /t 3',
+                    f'/c {full_cmd} & echo Rules created. & timeout /t 3',
                     None, 1
                 )
                 if ret <= 32:
@@ -90,13 +97,12 @@ def _ensure_firewall():
             except Exception as e:
                 print(f"[System] UAC error: {e}", flush=True)
 
-    print(f"[System] ╔══════════════════════════════════════════════════╗", flush=True)
-    print(f"[System] ║   GUEST CANNOT JOIN? Run ONE command as Admin:  ║", flush=True)
-    print(f"[System] ║                                                ║", flush=True)
-    print(f"[System] ║   {netsh_cmd:<50} ║", flush=True)
-    print(f"[System] ║                                                ║", flush=True)
-    print(f"[System] ║   Or just run the game as Administrator.       ║", flush=True)
-    print(f"[System] ╚══════════════════════════════════════════════════╝", flush=True)
+    print(f"[System] ╔═══════════════════════════════════════════════════════════════════════════════╗", flush=True)
+    print(f"[System] ║   GUEST CANNOT JOIN? Run the game as Administrator, or run these in Cmd as Admin: ║", flush=True)
+    print(f"[System] ║                                                                               ║", flush=True)
+    print(f"[System] ║   {netsh_cmd:<76} ║", flush=True)
+    print(f"[System] ║   {netsh_exe_cmd:<76} ║", flush=True)
+    print(f"[System] ╚═══════════════════════════════════════════════════════════════════════════════╝", flush=True)
     return False
 
 
