@@ -11,7 +11,7 @@ import time
 import threading
 from config.settings import SERVER_PORT, TICK_INTERVAL, WEAPON_DAMAGE, KILLS_TO_WIN_DEFAULT
 from server.game_state import GameState
-from server.discovery import DiscoveryBroadcaster, _get_local_ip
+from server.discovery import DiscoveryBroadcaster, _get_local_ip, get_all_local_ips
 
 
 def _kill_port_owner(port):
@@ -109,14 +109,14 @@ class ArenaServer:
 
         self.sock.settimeout(1.0)
 
-        host_ip = _get_local_ip()
-        print(f"[Server] ╔══════════════════════════════════════╗", flush=True)
-        print(f"[Server] ║  IRONSIGHT ARENA SERVER RUNNING     ║", flush=True)
-        print(f"[Server] ║  IP: {host_ip:<15}         ║", flush=True)
-        print(f"[Server] ║  Port: {self.port:<5}                   ║", flush=True)
-        print(f"[Server] ║  Tell guests to connect via:        ║", flush=True)
-        print(f"[Server] ║  {host_ip}:{self.port:<5}                  ║", flush=True)
-        print(f"[Server] ╚══════════════════════════════════════╝", flush=True)
+        ips = get_all_local_ips()
+        print(f"[Server] ╔══════════════════════════════════════════════════╗", flush=True)
+        print(f"[Server] ║  IRONSIGHT ARENA SERVER RUNNING                  ║", flush=True)
+        print(f"[Server] ║  Port: {self.port:<5}                                     ║", flush=True)
+        print(f"[Server] ║  Detected IP Addresses (Guests connect to Wi-Fi):║", flush=True)
+        for ip in ips:
+            print(f"[Server] ║   - {ip:<45} ║", flush=True)
+        print(f"[Server] ╚══════════════════════════════════════════════════╝", flush=True)
 
         self.running = True
 
