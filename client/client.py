@@ -168,13 +168,15 @@ class GameClient:
             else:
                 self._k_respawn_down = False
 
-        # drain network state into interpolation buffer
-        state = self.network.get_latest_state()
-        if state:
-            recv_time = time.time()
-            self._state_buffer.append((recv_time, state))
+        # drain network states into interpolation buffer
+        states = self.network.pop_all_states()
+        now = time.time()
+        for s in states:
+            self._state_buffer.append((now, s))
+
+        if self._state_buffer:
             # Keep only last 1 second of states
-            cutoff = recv_time - 1.0
+            cutoff = now - 1.0
             self._state_buffer = [(t, s) for t, s in self._state_buffer if t > cutoff]
 
         # Apply interpolated state for smooth remote player rendering
@@ -228,6 +230,12 @@ class GameClient:
                 pz = p_data["pos"][2] + (f_data["pos"][2] - p_data["pos"][2]) * t
                 f_data["pos"] = [px, py, pz]
                 f_data["rot"] = p_data["rot"] + (f_data["rot"] - p_data["rot"]) * t
+
+        # Merge all events from buffered states to prevent dropping feed events
+        all_events = []
+        for _, s in self._state_buffer:
+            all_events.extend(s.get("events", []))
+        result["events"] = all_events
 
         return result
 

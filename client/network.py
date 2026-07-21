@@ -165,12 +165,12 @@ class NetworkManager:
 
     # ── convenience ───────────────────────────
 
-    def get_latest_state(self):
-        """Drain the queue and return only the most recent state (or None)."""
-        latest = None
+    def pop_all_states(self):
+        """Drain and return all state snapshots in the queue in order."""
+        states = []
         while not self.state_queue.empty():
             try:
-                latest = self.state_queue.get_nowait()
+                states.append(self.state_queue.get_nowait())
             except Empty:
                 break
-        return latest
+        return states
