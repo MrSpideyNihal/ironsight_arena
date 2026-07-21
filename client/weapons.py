@@ -132,7 +132,7 @@ class Weapon(Entity):
         self._bullet_trace(camera.world_position + camera.forward * 1.5, end_point)
 
         # ── network ──────────────────────────
-        if network and network.joined:
+        if network and network.running:
             network.send({
                 "type": "shoot",
                 "player_id": self.owner.player_id,

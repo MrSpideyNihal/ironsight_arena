@@ -168,6 +168,12 @@ class MainMenu(Entity):
             origin=(0, 0), position=(0.30, 0.18), scale=1.2,
             color=color.rgb32(140, 140, 140))
 
+        # ── connection status feedback ────────
+        self.conn_status = Text(
+            parent=self, text="",
+            origin=(0, 0), position=(0, -0.60), scale=1.4,
+            color=color.rgb32(255, 200, 50))
+
         # ── start discovery listener ──────────
         self._disc_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._disc_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -281,17 +287,23 @@ class MainMenu(Entity):
     def _click_host(self):
         name = self.name_field.text or "Player"
         server_name = self.server_name_field.text or f"{name}'s Server"
+        self.conn_status.text = "Starting server..."
+        self.conn_status.color = color.rgb32(80, 255, 160)
         self._shutdown()
         self.on_host_cb(name, server_name, self.speed_multiplier, self.ammo_multiplier, self.selected_color_idx, self.kills_to_win)
 
     def _click_direct(self):
         name = self.name_field.text or "Player"
         ip = self.ip_field.text or "127.0.0.1"
+        self.conn_status.text = f"Connecting to {ip}..."
+        self.conn_status.color = color.rgb32(255, 200, 50)
         self._shutdown()
         self.on_join_cb(ip, name, SERVER_PORT, self.selected_color_idx)
 
     def _click_discovered(self, ip, port):
         name = self.name_field.text or "Player"
+        self.conn_status.text = f"Connecting to {ip}:{port}..."
+        self.conn_status.color = color.rgb32(80, 255, 160)
         self._shutdown()
         self.on_join_cb(ip, name, port, self.selected_color_idx)
 
@@ -301,6 +313,8 @@ class MainMenu(Entity):
             destroy(self._color_indicator_ent)
         for b in self._color_btns:
             destroy(b)
+        if hasattr(self, '_no_servers_text') and self._no_servers_text:
+            destroy(self._no_servers_text)
         try:
             self._disc_sock.close()
         except Exception:

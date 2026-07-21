@@ -67,6 +67,10 @@ class GameClient:
         self.arena_ents = []
         self.started = False
 
+        # State interpolation buffer for smooth remote player movement
+        self._state_buffer = []  # [(receive_time, state), ...]
+        self._interp_delay = 0.05  # 50ms interpolation delay (optimal for LAN)
+
         # show main menu first
         self.menu = MainMenu(on_host=self.host_game, on_join=self.join_game)
 
@@ -164,10 +168,68 @@ class GameClient:
             else:
                 self._k_respawn_down = False
 
-        # drain network state
+        # drain network state into interpolation buffer
         state = self.network.get_latest_state()
         if state:
-            self._apply_state(state, dt)
+            recv_time = time.time()
+            self._state_buffer.append((recv_time, state))
+            # Keep only last 1 second of states
+            cutoff = recv_time - 1.0
+            self._state_buffer = [(t, s) for t, s in self._state_buffer if t > cutoff]
+
+        # Apply interpolated state for smooth remote player rendering
+        interp_state = self._build_interpolated_state()
+        if interp_state:
+            self._apply_state(interp_state, dt)
+
+    def _build_interpolated_state(self):
+        if not self._state_buffer:
+            return None
+        if len(self._state_buffer) < 2:
+            return self._state_buffer[-1][1]
+
+        now = time.time()
+        render_time = now - self._interp_delay
+
+        past = None
+        future = None
+        for i in range(len(self._state_buffer) - 1):
+            t1, s1 = self._state_buffer[i]
+            t2, s2 = self._state_buffer[i + 1]
+            if t1 <= render_time <= t2:
+                past = (t1, s1)
+                future = (t2, s2)
+                break
+
+        if not past or not future:
+            past = self._state_buffer[-2]
+            future = self._state_buffer[-1]
+
+        t_diff = future[0] - past[0]
+        if t_diff <= 0:
+            return future[1]
+
+        t = (render_time - past[0]) / t_diff
+        t = max(0.0, min(1.0, t))
+
+        import copy
+        result = copy.deepcopy(future[1])
+
+        past_players = past[1].get("players", {})
+        future_players = result.get("players", {})
+
+        for pid, f_data in future_players.items():
+            if pid == self.player_id:
+                continue
+            p_data = past_players.get(pid)
+            if p_data:
+                px = p_data["pos"][0] + (f_data["pos"][0] - p_data["pos"][0]) * t
+                py = p_data["pos"][1] + (f_data["pos"][1] - p_data["pos"][1]) * t
+                pz = p_data["pos"][2] + (f_data["pos"][2] - p_data["pos"][2]) * t
+                f_data["pos"] = [px, py, pz]
+                f_data["rot"] = p_data["rot"] + (f_data["rot"] - p_data["rot"]) * t
+
+        return result
 
     def _apply_state(self, state, dt):
         players = state.get("players", {})

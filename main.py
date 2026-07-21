@@ -23,8 +23,9 @@ if getattr(sys, '_MEIPASS', None):
 
 from ursina import Ursina, window, color, camera, scene
 
-from server.server import ArenaServer 
+from server.server import ArenaServer
 from client.client import GameClient
+from config.settings import SERVER_PORT
 
 client = None
 _server = None
@@ -45,61 +46,63 @@ def _start_server(nickname, server_name=None, speed_mult=1.0, ammo_mult=1.0, kil
     _server.start()
 
 
-def _add_firewall_rules():
-    import ctypes
-    import sys
-    import os
+def _ensure_firewall():
+    import ctypes, sys, os, subprocess
 
-    # Only run on Windows
     if os.name != 'nt':
-        return
+        return True
 
     try:
-        # Check if already running with admin privileges
         is_admin = ctypes.windll.shell32.IsUserAnAdmin() != 0
     except Exception:
         is_admin = False
 
-    exe_path = os.path.abspath(sys.executable)
-
-    # Inline powershell script to configure firewall rules (clears old rules first)
-    ps_commands = (
-        f"Remove-NetFirewallRule -DisplayName 'IronsightUDP' -ErrorAction SilentlyContinue; "
-        f"Remove-NetFirewallRule -DisplayName 'IronsightExe' -ErrorAction SilentlyContinue; "
-        f"Remove-NetFirewallRule -DisplayName 'Ironsight Arena UDP' -ErrorAction SilentlyContinue; "
-        f"Remove-NetFirewallRule -DisplayName 'Ironsight Arena Executable' -ErrorAction SilentlyContinue; "
-        f"New-NetFirewallRule -DisplayName 'IronsightUDP' -Direction Inbound -Protocol UDP -LocalPort 7777-7787 -Action Allow -Profile Any -ErrorAction SilentlyContinue; "
-        f"New-NetFirewallRule -DisplayName 'IronsightExe' -Direction Inbound -Program '{exe_path}' -Action Allow -Profile Any -ErrorAction SilentlyContinue"
+    ports = "7777-7787"
+    rule_name = "Ironsight Arena"
+    netsh_cmd = (
+        f'netsh advfirewall firewall add rule name="{rule_name}" '
+        f'dir=in protocol=udp localport={ports} action=allow'
     )
 
+    # Try to create rule
     if is_admin:
-        import subprocess
         try:
-            subprocess.run(['powershell', '-ExecutionPolicy', 'Bypass', '-Command', ps_commands], capture_output=True, creationflags=0x08000000)
-        except Exception:
-            pass
+            r = subprocess.run(netsh_cmd, capture_output=True, text=True, timeout=10)
+            if r.returncode == 0:
+                print(f"[System] Firewall rule '{rule_name}' created (UDP {ports}).", flush=True)
+                return True
+            else:
+                print(f"[System] netsh failed: {r.stderr.strip()}", flush=True)
+        except Exception as e:
+            print(f"[System] Firewall setup failed: {e}", flush=True)
     else:
-        # Check if we already asked / tried to elevate during this execution (prevent infinite prompt loops)
         if not getattr(sys, '_firewall_prompted', False):
             sys._firewall_prompted = True
             try:
-                # Trigger Windows UAC prompt to run powershell with bypass
-                ctypes.windll.shell32.ShellExecuteW(
-                    None,
-                    "runas",
-                    "powershell.exe",
-                    f"-ExecutionPolicy Bypass -Command \"{ps_commands}\"",
-                    None,
-                    0 # Hide console window
+                print("[System] Requesting admin to open UDP ports 7777-7787...", flush=True)
+                ret = ctypes.windll.shell32.ShellExecuteW(
+                    None, "runas", "cmd.exe",
+                    f'/c {netsh_cmd} & echo Rule created. & timeout /t 3',
+                    None, 1
                 )
-                print("[System] Windows UAC prompt requested to configure Firewall rules (Profile: Any, Ports: 7777-7787) for UDP multiplayer.", flush=True)
+                if ret <= 32:
+                    print(f"[System] UAC elevation failed (code={ret}).", flush=True)
             except Exception as e:
-                print(f"[System] Failed to prompt for firewall rule: {e}", flush=True)
+                print(f"[System] UAC error: {e}", flush=True)
+
+    print(f"[System] ╔══════════════════════════════════════════════════╗", flush=True)
+    print(f"[System] ║   GUEST CANNOT JOIN? Run ONE command as Admin:  ║", flush=True)
+    print(f"[System] ║                                                ║", flush=True)
+    print(f"[System] ║   {netsh_cmd:<50} ║", flush=True)
+    print(f"[System] ║                                                ║", flush=True)
+    print(f"[System] ║   Or just run the game as Administrator.       ║", flush=True)
+    print(f"[System] ╚══════════════════════════════════════════════════╝", flush=True)
+    return False
 
 
 def main():
     global client
-    _add_firewall_rules()
+    _ensure_firewall()
     app = Ursina(
         title="Ironsight Arena",
         borderless=False,
@@ -122,8 +125,13 @@ def main():
     def on_host(nickname, server_name, speed_mult=1.0, ammo_mult=1.0, color_idx=0, kills_to_win=10):
         _start_server(nickname, server_name, speed_mult, ammo_mult, kills_to_win)
         client.selected_color_idx = color_idx
-        std_time.sleep(0.3)
-        actual_port = _server.port if _server else 5555
+        # Wait for server to be ready with retries
+        for _ in range(10):
+            if _server and _server.running:
+                break
+            std_time.sleep(0.1)
+        actual_port = _server.port if _server else SERVER_PORT
+        std_time.sleep(0.2)
         _original_host(nickname, port=actual_port)
 
     if client.menu:

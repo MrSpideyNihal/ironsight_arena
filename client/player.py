@@ -259,7 +259,7 @@ class LocalPlayer(_BasePlayer):
     def update(self):
         respawn_down = held_keys['k']
         if not self.alive:
-            if respawn_down and not self._respawn_was_down and self.network and self.network.joined:
+            if respawn_down and not self._respawn_was_down and self.network and self.network.running:
                 self.network.send({
                     "type": "respawn",
                     "player_id": self.player_id,
@@ -444,7 +444,7 @@ class LocalPlayer(_BasePlayer):
         grenade_down = held_keys['g']
         if grenade_down and not getattr(self, '_grenade_was_down', False) and self._grenade_cooldown <= 0:
             self._grenade_cooldown = GRENADE_COOLDOWN
-            if self.network and self.network.joined:
+            if self.network and self.network.running:
                 self.network.send({
                     "type": "ability",
                     "ability": "grenade",
@@ -463,7 +463,7 @@ class LocalPlayer(_BasePlayer):
             self.weapon.reload()
 
         # ── send position to server ──────────
-        if self.network and self.network.joined:
+        if self.network and self.network.running:
             self.network.send({
                 "type": "input",
                 "player_id": self.player_id,
@@ -499,8 +499,10 @@ class RemotePlayer(_BasePlayer):
         dt = ursina_time.dt
         if not self.alive:
             return
-        # smooth interpolation
-        lerp_speed = 12.0
+        # Adaptive lerp: faster when far from target, smooth when close
+        dist = (self.target_pos - self.position).length()
+        lerp_speed = 10.0 + dist * 2.0  # 10 at dist=0, 30 at dist=10
+        lerp_speed = min(30.0, lerp_speed)
         self.position += (self.target_pos - self.position) * min(1.0, lerp_speed * dt)
         # shortest-path rotation lerp
         diff = (self.target_rot - self.rotation_y + 180) % 360 - 180

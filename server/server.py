@@ -26,6 +26,8 @@ class ArenaServer:
 
         self.clients_lock = threading.Lock()
         self.clients = {}  # (ip, port) → {"id": str, "last_seen": float}
+        self._input_throttle = {}  # pid → last_input_time
+        self._input_throttle_interval = 1.0 / 30.0  # Max 30 input updates/sec per client
 
         self.running = False
         self.sock = None
@@ -64,7 +66,13 @@ class ArenaServer:
         self.sock.settimeout(1.0)
 
         host_ip = _get_local_ip()
-        print(f"[Server] Listening on {host_ip}:{self.port}", flush=True)
+        print(f"[Server] ╔══════════════════════════════════════╗", flush=True)
+        print(f"[Server] ║  IRONSIGHT ARENA SERVER RUNNING     ║", flush=True)
+        print(f"[Server] ║  IP: {host_ip:<15}         ║", flush=True)
+        print(f"[Server] ║  Port: {self.port:<5}                   ║", flush=True)
+        print(f"[Server] ║  Tell guests to connect via:        ║", flush=True)
+        print(f"[Server] ║  {host_ip}:{self.port:<5}                  ║", flush=True)
+        print(f"[Server] ╚══════════════════════════════════════╝", flush=True)
 
         self.running = True
 
@@ -155,6 +163,12 @@ class ArenaServer:
                     self.clients[addr]["last_seen"] = time.time()
             if not mapped_pid or (pid and pid != mapped_pid):
                 return
+            # Server-side input rate limiting
+            now = time.time()
+            last = self._input_throttle.get(mapped_pid, 0)
+            if now - last < self._input_throttle_interval:
+                return
+            self._input_throttle[mapped_pid] = now
             self.state.update_player_input(mapped_pid, msg.get("pos", [0, 0, 0]), msg.get("rot", 0), msg.get("weapon", "Assault Rifle"))
 
         elif mtype == "shoot":
@@ -230,7 +244,7 @@ class ArenaServer:
             stale = []
             with self.clients_lock:
                 for addr, info in self.clients.items():
-                    if now - info["last_seen"] > 6.0:
+                    if now - info["last_seen"] > 3.0:
                         stale.append(addr)
 
             for addr in stale:

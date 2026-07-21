@@ -27,6 +27,9 @@ class NetworkManager:
 
         self._ping_seq = 0
         self._pings = {}
+        self._last_input_time = 0
+        self._input_send_interval = 1.0 / 20.0
+        self._join_retry_count = 0
 
     # ── connect / disconnect ──────────────────
 
@@ -74,12 +77,19 @@ class NetworkManager:
     def send(self, payload):
         if not self.sock or not self.server_addr:
             return
+        mtype = payload.get("type", "")
+        # Rate-limit position input packets to reduce bandwidth
+        if mtype == "input":
+            now = time.time()
+            if now - self._last_input_time < self._input_send_interval:
+                return
+            self._last_input_time = now
         try:
             data = json.dumps(payload).encode("utf-8")
             self.sock.sendto(data, self.server_addr)
             # Log join or ability packets to avoid spamming positions
-            if payload.get("type") in ("join", "ability", "shoot", "respawn"):
-                print(f"[Client Network] Sent '{payload['type']}' to {self.server_addr}", flush=True)
+            if mtype in ("join", "ability", "shoot", "respawn"):
+                print(f"[Client Network] Sent '{mtype}' to {self.server_addr}", flush=True)
         except Exception as e:
             print(f"[Client Network Error] sendto failed to {self.server_addr}: {e}", flush=True)
 
@@ -127,8 +137,11 @@ class NetworkManager:
                 self.latency = int((time.time() - self._pings.pop(seq)) * 1000)
 
     def _ping_loop(self):
+        join_interval = 0.1
         while self.running:
             if self.joined:
+                self._join_retry_count = 0
+                join_interval = 0.1
                 self._ping_seq += 1
                 self._pings[self._ping_seq] = time.time()
                 self.send({"type": "ping", "player_id": self.player_id,
@@ -137,7 +150,7 @@ class NetworkManager:
                 cutoff = time.time() - 5
                 self._pings = {k: v for k, v in self._pings.items() if v > cutoff}
             else:
-                # Retry join request periodically until confirmed
+                # Retry join with increasing intervals
                 name = getattr(self, '_player_name', 'Player')
                 color_idx = getattr(self, '_color_idx', 0)
                 self.send({
@@ -146,7 +159,9 @@ class NetworkManager:
                     "name": name,
                     "color_idx": color_idx
                 })
-            time.sleep(1.0)
+                self._join_retry_count += 1
+                join_interval = min(2.0, 0.1 * self._join_retry_count)
+            time.sleep(join_interval)
 
     # ── convenience ───────────────────────────
 
