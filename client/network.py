@@ -119,6 +119,8 @@ class NetworkManager:
         mtype = msg.get("type")
         if mtype == "joined":
             if msg.get("player_id") == self.player_id:
+                if not self.joined:
+                    print(f"[Client Network] Joined server successfully! Player ID: {self.player_id}", flush=True)
                 self.joined = True
                 self.speed_multiplier = msg.get("speed_mult", 1.0)
                 self.ammo_multiplier = msg.get("ammo_mult", 1.0)

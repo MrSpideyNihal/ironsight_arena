@@ -70,6 +70,7 @@ class GameClient:
         # State interpolation buffer for smooth remote player movement
         self._state_buffer = []  # [(receive_time, state), ...]
         self._interp_delay = 0.05  # 50ms interpolation delay (optimal for LAN)
+        self._last_state_time = time.time()
 
         # show main menu first
         self.menu = MainMenu(on_host=self.host_game, on_join=self.join_game)
@@ -171,8 +172,17 @@ class GameClient:
         # drain network states into interpolation buffer
         states = self.network.pop_all_states()
         now = time.time()
-        for s in states:
-            self._state_buffer.append((now, s))
+        if states:
+            self._last_state_time = now
+            for s in states:
+                self._state_buffer.append((now, s))
+
+        if self.network.joined:
+            if now - getattr(self, '_last_state_time', now) > 2.0:
+                print(f"[Client] Connection timed out (no states for 2.0s). Rejoining...", flush=True)
+                self.network.joined = False
+                self._applied_host_settings = False
+                self._last_state_time = now
 
         if self._state_buffer:
             # Keep only last 1 second of states
@@ -264,6 +274,13 @@ class GameClient:
                 self._death_time = time.time()
                 self.hud.set_status("YOU DIED - PRESS K TO RESPAWN")
                 self.hud.flash_damage()
+        else:
+            # If we are not in the server's players list, we have been timed out or disconnected.
+            # Reset joined status to trigger a rejoin handshake.
+            if self.network.joined:
+                print(f"[Client] Not found in server player list. Rejoining...", flush=True)
+                self.network.joined = False
+                self._applied_host_settings = False
 
         # ── remote players ────────────────────
         for pid, data in players.items():
